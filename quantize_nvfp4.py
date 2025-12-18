@@ -37,7 +37,7 @@ def quantize(model: str, output: str, size:int, seed: int):
     print(f"Loading {model}...")
     model = AutoModelForCausalLM.from_pretrained(
         model,
-        device_map="auto",
+        device_map="cuda:0",
         torch_dtype="auto",
     )
 
