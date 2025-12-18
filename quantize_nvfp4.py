@@ -28,7 +28,7 @@ def _prepare_dataset(tokenizer: PreTrainedTokenizerBase, seed: int, size: int, r
 
 
 
-def quantize(model: str, output: str, size:int, seed: int):
+def quantize(model: str, output: str, size:int, seed: int, basic: bool):
 
     tokenizer = AutoTokenizer.from_pretrained(model, fix_mistral_regex=True) # Mistral only, pre 2503 is ok.
     sample_count = _calculate_scalar(size, ratio)*ratio.total()
@@ -55,6 +55,7 @@ def quantize(model: str, output: str, size:int, seed: int):
         max_seq_length=2048,
         num_calibration_samples=sample_count,
         tokenizer=tokenizer,
+        pipeline="basic" if basic else "sequential",
     )
 
     print(f"Saving to {output}...")
@@ -74,11 +75,12 @@ if __name__ == '__main__':
     parser.add_argument("--ultra_chat", type=int, required=True, help="Ratio of dataset to build from ultrachat_200k")
     parser.add_argument("--c4_en", type=int, required=True, help="Ratio of dataset to build from C4")
     parser.add_argument("--fiction_v8", type=int, required=True, help="Ratio of dataset to build fiction books v8")
+    parser.add_argument("--pipeline_basic", type=bool, default=True, help="Run llmcompressor BasicPipeline (full GPU offload), SequentialPipeline when false.")
     args = parser.parse_args()
     ratio = Counter({
         "ultra_chat": args.ultra_chat,
         "c4_en": args.c4_en,
         "fiction_v8": args.fiction_v8})
 
-    quantize(model=args.model, output=args.output, size=args.size, seed=args.seed)
+    quantize(model=args.model, output=args.output, size=args.size, seed=args.seed, basic=args.pipeline_basic)
 
