@@ -75,7 +75,7 @@ if __name__ == '__main__':
     parser.add_argument("--ultra_chat", type=int, required=True, help="Ratio of dataset to build from ultrachat_200k")
     parser.add_argument("--c4_en", type=int, required=True, help="Ratio of dataset to build from C4")
     parser.add_argument("--fiction_v8", type=int, required=True, help="Ratio of dataset to build fiction books v8")
-    parser.add_argument("--pipeline_basic", type=bool, default=True, help="Run llmcompressor BasicPipeline (full GPU offload), SequentialPipeline when false.")
+    parser.add_argument("--pipeline_basic", action="store_true", help="Run llmcompressor BasicPipeline for a full GPU VRAM offload, SequentialPipeline when not set.")
     args = parser.parse_args()
     ratio = Counter({
         "ultra_chat": args.ultra_chat,
