@@ -15,8 +15,10 @@ def _calculate_scalar(size: int, ratio: Counter) -> int:
         scalar += 1
     return scalar
 
+
 def _prepare_dataset(tokenizer: PreTrainedTokenizerBase, seed: int, size: int, ratio: Counter):
     scalar = _calculate_scalar(size, ratio)
+    ratio = ratio.copy()
     for k, v in ratio.items():
         ratio[k]=v*scalar
 
@@ -27,8 +29,7 @@ def _prepare_dataset(tokenizer: PreTrainedTokenizerBase, seed: int, size: int, r
     return Dataset.from_generator(lambda: (yield from iterable_ds), features=iterable_ds.features)
 
 
-
-def quantize(model: str, output: str, size:int, seed: int, basic: bool):
+def quantize(model: str, output: str, size:int, seed: int, basic: bool, ratio: Counter):
 
     tokenizer = AutoTokenizer.from_pretrained(model, fix_mistral_regex=True) # Mistral only, pre 2503 is ok.
     sample_count = _calculate_scalar(size, ratio)*ratio.total()
@@ -64,23 +65,30 @@ def quantize(model: str, output: str, size:int, seed: int, basic: bool):
     print("Done.")
 
 
+def parse_sizes(value):
+    return [int(x) for x in value.split(',')]
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
         prog='quantize_nvfp4',
         description='Quantize an LLM model to NVFP4 using')
     parser.add_argument("-m", "--model", type=str, required=True, help="Model name or path.")
     parser.add_argument("-o", "--output", type=str, required=True, help="Output directory.")
-    parser.add_argument("-s", "--size", type=int, required=True, help="Size of calibration dataset.")
+    parser.add_argument("-s", "--size", type=parse_sizes, required=True, help="Size of calibration dataset. Can be a single integer or a comma-separated list.")
     parser.add_argument("--seed", type=int, required=True, help="Random seed used to shuffle datasets.")
     parser.add_argument("--ultra_chat", type=int, required=True, help="Ratio of dataset to build from ultrachat_200k")
     parser.add_argument("--c4_en", type=int, required=True, help="Ratio of dataset to build from C4")
     parser.add_argument("--fiction_v8", type=int, required=True, help="Ratio of dataset to build fiction books v8")
     parser.add_argument("--pipeline_basic", action="store_true", help="Run llmcompressor BasicPipeline for a full GPU VRAM offload, SequentialPipeline when not set.")
     args = parser.parse_args()
+    
     ratio = Counter({
         "ultra_chat": args.ultra_chat,
         "c4_en": args.c4_en,
         "fiction_v8": args.fiction_v8})
 
-    quantize(model=args.model, output=args.output, size=args.size, seed=args.seed, basic=args.pipeline_basic)
+    for size in args.size:
+        current_output = f"{args.output}_{size}S"
+        quantize(model=args.model, output=current_output, size=size, seed=args.seed, basic=args.pipeline_basic, ratio=ratio)
 
