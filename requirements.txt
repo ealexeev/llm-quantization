@@ -1,0 +1,3 @@
+llmcompressor
+datasets
+hf_transfer
