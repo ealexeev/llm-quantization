@@ -29,17 +29,18 @@ def _prepare_dataset(tokenizer: PreTrainedTokenizerBase, seed: int, size: int, r
     return Dataset.from_generator(lambda: (yield from iterable_ds), features=iterable_ds.features)
 
 
-def quantize(model: str, output: str, size:int, seed: int, basic: bool, ratio: Counter):
+def quantize(model: str, output: str, size:int, seed: int, basic: bool, ratio: Counter, trust_remote_code: bool):
 
-    tokenizer = AutoTokenizer.from_pretrained(model, fix_mistral_regex=True) # Mistral only, pre 2503 is ok.
+    tokenizer = AutoTokenizer.from_pretrained(model, fix_mistral_regex=True, trust_remote_code=trust_remote_code) # Mistral only, pre 2503 is ok.
     sample_count = _calculate_scalar(size, ratio)*ratio.total()
     dataset = _prepare_dataset(tokenizer, seed, size, ratio)
     
     print(f"Loading {model}...")
     model = AutoModelForCausalLM.from_pretrained(
         model,
-        device_map="cuda:0",
+        device_map="auto",
         torch_dtype="auto",
+        trust_remote_code=trust_remote_code,
     )
 
     recipe = QuantizationModifier(
@@ -81,6 +82,7 @@ if __name__ == '__main__':
     parser.add_argument("--c4_en", type=int, required=True, help="Ratio of dataset to build from C4")
     parser.add_argument("--fiction_v8", type=int, required=True, help="Ratio of dataset to build fiction books v8")
     parser.add_argument("--pipeline_basic", action="store_true", help="Run llmcompressor BasicPipeline for a full GPU VRAM offload, SequentialPipeline when not set.")
+    parser.add_argument("--trust-remote-code", action="store_true", help="Trust remote code when loading model and tokenizer.")
     args = parser.parse_args()
     
     ratio = Counter({
@@ -90,5 +92,5 @@ if __name__ == '__main__':
 
     for size in args.size:
         current_output = f"{args.output}_{size}S"
-        quantize(model=args.model, output=current_output, size=size, seed=args.seed, basic=args.pipeline_basic, ratio=ratio)
+        quantize(model=args.model, output=current_output, size=size, seed=args.seed, basic=args.pipeline_basic, ratio=ratio, trust_remote_code=args.trust_remote_code)
 
