@@ -25,10 +25,7 @@ def _prepare_dataset(seed: int, size: int, ratio: Counter):
     if ratio["ultra_chat"] > 0:
         print(f"Loading UltraChat (ratio: {ratio['ultra_chat']})...")
         ds = llm_dataset_load.GetUltraChat(seed, ratio["ultra_chat"])
-        # Capture columns before map, as map on IterableDataset may lose feature info/column_names
         columns_to_remove = [c for c in ds.column_names if c != "text"]
-        
-        # Format messages as JSON string
         def process_ultrachat(example):
             return {"text": json.dumps(example["messages"])}
         
@@ -49,8 +46,6 @@ def _prepare_dataset(seed: int, size: int, ratio: Counter):
     if ratio["c4_en"] > 0:
         print(f"Loading C4 (ratio: {ratio['c4_en']})...")
         ds = llm_dataset_load.GetC4(seed, ratio["c4_en"])
-        # C4 is already text but column name is 'text' so we just need to ensure we keep only valid columns
-        # Note: concatenate_datasets requires same features.
         columns_to_remove = [c for c in ds.column_names if c != "text"]
         ds = ds.remove_columns(columns_to_remove)
         datasets_list.append(ds)
@@ -59,8 +54,6 @@ def _prepare_dataset(seed: int, size: int, ratio: Counter):
         raise ValueError("No datasets selected via ratios.")
 
     iterable_ds = concatenate_datasets(datasets_list)
-    # Replicate quantize_nvfp4 behavior: it returns a generator-based dataset.
-    # We will just return the iterable since we are writing to file.
     return iterable_ds
 
 
@@ -96,7 +89,6 @@ def main():
         output_filename = f"{args.output}_{size}S.jsonl"
         print(f"Preparing dataset for size {size}...")
         
-        # Calculate total samples needed (same logic as quantize_nvfp4)
         sample_count = _calculate_scalar(size, ratio) * ratio.total()
         
         dataset = _prepare_dataset(args.seed, size, ratio)
@@ -104,21 +96,7 @@ def main():
         print(f"Writing to {output_filename}...")
         count = 0
         with open(output_filename, 'w') as f:
-            # We want exactly 'sample_count' samples, or what the dataset yields?
-            # quantize_nvfp4 calls oneshot with num_calibration_samples=sample_count
-            # The prepared dataset yields roughly that many (or more due to scalar logic?).
-            # _calculate_scalar logic ensures >= size.
-            
-            # Since dataset is a stream, we iterate up to sample_count.
-            # Wait, `ratio` was scaled in `_prepare_dataset`. 
-            # `llm_dataset_load` functions take `count` which does `ds.take(count)`.
-            # So `dataset` should yield exactly the sum of counts passed to Get functions.
-            # Which is `ratio['key'] * scalar`.
-            #Sum of `ratio.values()` after scaling is exactly `sample_count`.
-            
-            for i, example in enumerate(dataset):
-                # Just in case, break if we exceed (though take() handles it)
-                # But since we have multiple datasets concatenated, each handles its own limit.
+            for example in dataset:
                 json.dump(example, f)
                 f.write('\n')
                 count += 1
