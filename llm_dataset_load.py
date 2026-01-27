@@ -4,33 +4,47 @@ from transformers import PreTrainedTokenizerBase
 from typing import Callable, Dict, Optional
 
 
-# TokenizeDataset returns a dataset with a single column containing the tokenized input using process_func to select from a shuffled (based on seed) and sliced (based on count).
-def _TokenizeDataset(
+def _LoadDataset(
     dataset_name: str,
-    tokenizer: PreTrainedTokenizerBase, 
-    split=str,
-    trust_remote_code=False,
-    process_fn: Optional[Callable[[Dict], Dict[str, str]]] = None,
+    split: str,
     config_name: Optional[str] = None,
-    seed: Optional[int] = None, 
+    seed: Optional[int] = None,
     count: Optional[int] = None,
+    trust_remote_code=False,
 ):
-
-    ds = load_dataset(dataset_name, name=config_name, split=split, streaming=True)
+    ds = load_dataset(dataset_name, name=config_name, split=split, streaming=True, trust_remote_code=trust_remote_code)
     if seed is not None:
         ds = ds.shuffle(seed=seed, buffer_size=1000)
-    column_names = ds.column_names
-
-    def proces_fn(example: Dict[str, str]):
-        text = tokenizer.apply_chat_template(example[column], tokenize=False)
-        return tokenizer(text, truncation=True, max_length=2048)
-
-    ds = ds.map(process_fn)
-    ds = ds.remove_columns(column_names)
-    if count > 0:
+    if count is not None and count > 0:
         ds = ds.take(count)
     return ds
-    
+
+
+def _TokenizeDataset(
+    dataset_name: str,
+    split: str,
+    tokenizer: PreTrainedTokenizerBase,
+    process_fn: Callable[[Dict], Dict[str, str]],
+    config_name: Optional[str] = None,
+    seed: Optional[int] = None,
+    count: Optional[int] = None,
+    trust_remote_code=False,
+):
+    ds = _LoadDataset(dataset_name, split, config_name, seed, count, trust_remote_code)
+    column_names = ds.column_names
+    ds = ds.map(process_fn)
+    ds = ds.remove_columns(column_names)
+    return ds
+
+
+def GetUltraChat(seed: int, count: int):
+    return _LoadDataset(
+        dataset_name="HuggingFaceH4/ultrachat_200k",
+        split="train_sft",
+        seed=seed,
+        count=count
+    )
+
 
 def TokenizeUltraChat(tokenizer: PreTrainedTokenizerBase, seed: int, count: int):
     def process_fn(row):
@@ -44,6 +58,15 @@ def TokenizeUltraChat(tokenizer: PreTrainedTokenizerBase, seed: int, count: int)
                             seed=seed,
                             count=count)
 
+def GetFictionBooks(seed: int, count: int):
+    return _LoadDataset(
+        dataset_name="mrcedric98/fiction_books_v8",
+        split="train",
+        seed=seed,
+        count=count
+    )
+
+
 def TokenizeFictionBooks(tokenizer: PreTrainedTokenizerBase, seed: int, count: int):
     def process_fn(row):
         text = tokenizer.apply_chat_template([{"role": "user", "content": row["Input"]}], tokenize=False)
@@ -56,6 +79,16 @@ def TokenizeFictionBooks(tokenizer: PreTrainedTokenizerBase, seed: int, count: i
                             seed=seed,
                             count=count)
                                              
+
+def GetC4(seed: int, count: int):
+    return _LoadDataset(
+        dataset_name="allenai/c4",
+        config_name="en",
+        split="train",
+        seed=seed,
+        count=count
+    )
+
 
 def TokenizeC4(tokenizer: PreTrainedTokenizerBase, seed: int, count: int):
     def process_fn(row):
